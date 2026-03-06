@@ -1,0 +1,12 @@
+# Dockerfile.cross
+ARG CROSS_BASE_IMAGE
+FROM $CROSS_BASE_IMAGE
+
+# 安装目标平台（arm64）的 D-Bus 开发库（rustls 不依赖系统 OpenSSL）
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libdbus-1-dev:arm64 \
+        pkg-config \
+        gcc-aarch64-linux-gnu && \
+    rm -rf /var/lib/apt/lists/*

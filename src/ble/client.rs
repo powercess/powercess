@@ -12,7 +12,7 @@ use crate::error::{AppError, AppResult};
 use crate::model::{DeviceInfo, Measurement};
 
 use super::protocol::{
-    build_f001_query, parse_f001_response, NOTIFY_CHAR_UUID, SERVICE_UUID, WRITE_CHAR_UUID,
+    build_f001_query, parse_f001_response, NOTIFY_CHAR_UUID, WRITE_CHAR_UUID,
 };
 
 // ── BLE 管理 ──────────────────────────────────────────────────────────────────
@@ -37,11 +37,10 @@ pub async fn scan_for_device(
 ) -> AppResult<Option<Peripheral>> {
     let mac_upper = target_mac.to_uppercase();
 
-    adapter
-        .start_scan(ScanFilter {
-            services: vec![SERVICE_UUID],
-        })
-        .await?;
+    // 注意：BlueZ（Linux/树莓派）不支持按 Service UUID 过滤广播包，
+    // 许多设备不在广播包中携带 Service UUID，导致过滤后扫描结果为空。
+    // 使用空 ScanFilter 扫描所有设备，由后续 MAC 地址匹配完成定位。
+    adapter.start_scan(ScanFilter::default()).await?;
     debug!("[BLE] 开始扫描（最长 {timeout_secs}s），目标 {mac_upper}");
 
     let mut found: Option<Peripheral> = None;
