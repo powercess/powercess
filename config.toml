@@ -1,0 +1,58 @@
+# powercess 配置文件
+# 所有配置项均可通过环境变量覆盖，前缀为 POWERCESS__，层级用 __ 分隔。
+# 例：POWERCESS__APP__POLL_INTERVAL_SECS=30
+
+# ── 应用参数 ──────────────────────────────────────────────────────────────────
+[app]
+# 每次采集间隔（秒）
+poll_interval_secs = 1
+
+# tokio worker 线程数（树莓派 4 建议 2，过多线程反而增加切换开销）
+worker_threads = 2
+
+# 日志级别：trace | debug | info | warn | error
+log_level = "info"
+
+# BLE 扫描单次超时（秒）
+scan_timeout_secs = 15
+
+# 连接/扫描失败后初始重试等待（秒），采用指数退避，上限 300s
+retry_interval_secs = 30
+
+# ── 设备数据层 ────────────────────────────────────────────────────────────────
+# type 可选值：
+#   "static"   — 使用下方 [[devices]] 列表（无需数据库，推荐树莓派嵌入式场景）
+#   "sqlite"   — 从 SQLite 数据库读取（需编译 feature: store-sqlite）
+#   "postgres" — 从 PostgreSQL 读取（需编译 feature: store-postgres）
+[store]
+type = "static"
+
+# SQLite 示例（激活时取消注释并修改 type）
+# type  = "sqlite"
+# path  = "/var/lib/powercess/powercess.db"
+
+# PostgreSQL 示例
+# type = "postgres"
+# url  = "postgres://powercess:password@localhost/powercess"
+
+# ── 上报配置 ──────────────────────────────────────────────────────────────────
+[reporter]
+# 启用 HTTP REST API（feature: reporter-http）
+http_enabled = true
+# 监听地址（0.0.0.0 表示所有网卡，树莓派局域网可访问）
+http_bind = "0.0.0.0:8080"
+
+# 将测量值写入数据库（需要 store.type = "sqlite" 或 "postgres"）
+db_enabled = false
+
+# ── 静态设备列表（store.type = "static" 时生效） ─────────────────────────────
+[[devices]]
+mac   = "12:10:37:4C:47:47"
+name  = "德力西功率计-A04"
+label = "实验室插座"
+
+# 多台设备示例（取消注释并填写真实 MAC）
+# [[devices]]
+# mac   = "AA:BB:CC:DD:EE:FF"
+# name  = "德力西功率计-2"
+# label = "服务器机柜"

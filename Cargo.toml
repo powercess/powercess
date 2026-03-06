@@ -1,0 +1,61 @@
+[package]
+name = "powercess"
+version = "1.0.0"
+edition = "2021"
+
+# ── Feature 开关 ────────────────────────────────────────────────────────────────
+[features]
+default = ["store-sqlite", "reporter-http"]
+store-sqlite   = ["dep:sqlx", "sqlx/sqlite"]
+store-postgres = ["dep:sqlx", "sqlx/postgres"]
+reporter-http  = ["dep:axum", "dep:tower", "dep:tower-http"]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 所有依赖统一写在 [dependencies] 中，避免 [dependencies.xxx] 节把后续行吃掉
+# ──────────────────────────────────────────────────────────────────────────────
+[dependencies]
+# 运行时（树莓派 4：worker 线程数由配置控制，不硬编码 flavor）
+tokio        = { version = "1",   features = ["full", "signal"] }
+futures      = "0.3"
+
+# BLE
+btleplug     = "0.11"
+uuid         = { version = "1", features = ["v4"] }
+
+# 序列化
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+
+# 数据库（可选）
+sqlx = { version = "0.8", optional = true, features = ["runtime-tokio-native-tls", "chrono"] }
+
+# HTTP（可选）
+axum         = { version = "0.8", optional = true, features = ["ws"] }
+tower        = { version = "0.5", optional = true }
+tower-http   = { version = "0.6", optional = true, features = ["cors", "trace"] }
+
+# 错误处理
+anyhow       = "1"
+thiserror    = "2"
+
+# 结构化日志
+tracing             = "0.1"
+tracing-subscriber  = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# 无锁并发缓存（适合树莓派低延迟场景）
+dashmap      = "6"
+
+# async trait
+async-trait  = "0.1"
+
+# 时间
+chrono       = { version = "0.4", features = ["serde"] }
+
+# 配置文件（重命名为 config_crate，避免与 mod config 冲突）
+config_crate = { version = "0.15", package = "config" }
+
+[profile.release]
+opt-level     = 3
+lto           = "thin"
+codegen-units = 1
+strip         = true
