@@ -9,11 +9,11 @@ powercess 支持三种设备数据源后端（由 `config.toml` 中 `store.type`
 
 程序内部使用 `DeviceInfo` 结构体描述一台受监控设备，包含三个字段：
 
-| 字段    | 类型            | 必填 | 说明                                                                 |
-| ------- | --------------- | ---- | -------------------------------------------------------------------- |
-| `mac`   | `String`        | ✅   | BLE MAC 地址；**大写字母 + 冒号分隔**，如 `12:10:37:4C:47:47`       |
-| `name`  | `String`        | ✅   | 设备人类可读名称，在 HTTP API 响应和日志中展示                        |
-| `label` | `Option<String>`| ❌   | 可选的位置/备注标签（SQLite/静态）；PostgreSQL 对应 `location` 列     |
+| 字段    | 类型             | 必填 | 说明                                                              |
+| ------- | ---------------- | ---- | ----------------------------------------------------------------- |
+| `mac`   | `String`         | ✅   | BLE MAC 地址；**大写字母 + 冒号分隔**，如 `12:10:37:4C:47:47`     |
+| `name`  | `String`         | ✅   | 设备人类可读名称，在 HTTP API 响应和日志中展示                    |
+| `label` | `Option<String>` | ❌   | 可选的位置/备注标签（SQLite/静态）；PostgreSQL 对应 `location` 列 |
 
 ### MAC 地址格式要求
 
@@ -163,15 +163,15 @@ VALUES
 
 ### 4.4 字段说明
 
-| 列名             | 类型        | 必填 | 说明                                                            |
-| ---------------- | ----------- | ---- | --------------------------------------------------------------- |
-| `name`           | `TEXT`      | ✅   | 设备名称                                                        |
-| `mac_address`    | `TEXT`      | ✅   | BLE MAC 地址，格式由 CHECK 约束保证，全局唯一                    |
-| `device_type_id` | `INT`       | ✅   | 外键 `device_types.id`，决定 payload/前端渲染模板               |
-| `location`       | `TEXT`      | ❌   | 位置备注；对应程序内 `DeviceInfo.label`                         |
-| `reporter_id`    | `UUID`      | ❌   | 绑定到指定 reporter 节点；`NULL` 表示任意节点均可读取           |
-| `is_active`      | `BOOLEAN`   | —    | 默认 `true`；设为 `false` 则程序不扫描该设备                    |
-| `is_deleted`     | `BOOLEAN`   | —    | 默认 `false`；软删除，历史测量数据保留，程序不读取已软删除设备  |
+| 列名             | 类型      | 必填 | 说明                                                           |
+| ---------------- | --------- | ---- | -------------------------------------------------------------- |
+| `name`           | `TEXT`    | ✅   | 设备名称                                                       |
+| `mac_address`    | `TEXT`    | ✅   | BLE MAC 地址，格式由 CHECK 约束保证，全局唯一                  |
+| `device_type_id` | `INT`     | ✅   | 外键 `device_types.id`，决定 payload/前端渲染模板              |
+| `location`       | `TEXT`    | ❌   | 位置备注；对应程序内 `DeviceInfo.label`                        |
+| `reporter_id`    | `UUID`    | ❌   | 绑定到指定 reporter 节点；`NULL` 表示任意节点均可读取          |
+| `is_active`      | `BOOLEAN` | —    | 默认 `true`；设为 `false` 则程序不扫描该设备                   |
+| `is_deleted`     | `BOOLEAN` | —    | 默认 `false`；软删除，历史测量数据保留，程序不读取已软删除设备 |
 
 ### 4.5 停用 / 软删除设备
 

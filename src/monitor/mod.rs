@@ -2,12 +2,18 @@
 //!
 //! 设计原则（树莓派 4 优化）：
 //!   - 每台设备一个 task，避免单 BLE 会话阻塞全局
-//!   - 扫描阶段共用一个 Adapter，避免重复初始化
+//!   - **共享单个 Adapter**，避免重复初始化
+//!   - **扫描阶段用 Semaphore(1) 互斥**：同一时刻只有一个 task 在 start_scan/stop_scan，
+//!     防止某 task 的 stop_scan 把其他 task 正在进行的扫描也一并停掉。
+//!     找到外设后立即释放信号量，连接与轮询阶段完全并发。
+//!   - 各 task 错开 500ms 启动，避免全体同时抢扫描锁
 //!   - 断连 / 超时后 exponential backoff 重试，最长等待 `max_retry_secs`
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use btleplug::platform::Adapter;
+use tokio::sync::Semaphore;
 use tokio::time;
 use tracing::{debug, error, info, warn};
 
@@ -21,6 +27,8 @@ async fn monitor_device(
     device: DeviceInfo,
     settings: Arc<AppSettings>,
     reporter: Arc<dyn Reporter>,
+    adapter: Arc<Adapter>,
+    scan_lock: Arc<Semaphore>,
 ) {
     let mac = device.mac_upper();
     let mut retry_delay = settings.retry_interval_secs;
@@ -28,36 +36,29 @@ async fn monitor_device(
     loop {
         info!("[Monitor] 启动监控任务: {} ({})", device.name, mac);
 
-        // ── 1. 获取蓝牙适配器 ───────────────────────────────────────────────
-        let adapter = match get_adapter().await {
-            Ok(a) => a,
-            Err(e) => {
-                error!("[Monitor] 无法获取 BLE 适配器: {e}，{retry_delay}s 后重试");
-                time::sleep(Duration::from_secs(retry_delay)).await;
-                continue;
-            }
-        };
+        // ── 1. 获取扫描许可（同一时刻只允许一个 task 执行 start/stop_scan）──
+        //    持有 permit 期间执行扫描，找到设备后 permit 自动 drop，其他 task 即可开始扫描。
+        let peripheral = {
+            let _permit = scan_lock.acquire().await
+                .expect("scan_lock Semaphore 已关闭");
 
-        // ── 2. 扫描目标设备 ─────────────────────────────────────────────────
-        let peripheral = match scan_for_device(
-            &adapter,
-            &mac,
-            settings.scan_timeout_secs,
-        )
-        .await
-        {
-            Ok(Some(p)) => p,
-            Ok(None) => {
-                warn!("[Monitor] 扫描超时，未找到 {mac}，{retry_delay}s 后重试");
-                time::sleep(Duration::from_secs(retry_delay)).await;
-                retry_delay = (retry_delay * 2).min(300); // 最长等 5 分钟
-                continue;
+            // ── 2. 扫描目标设备 ─────────────────────────────────────────────
+            match scan_for_device(&adapter, &mac, settings.scan_timeout_secs).await {
+                Ok(Some(p)) => p,
+                Ok(None) => {
+                    warn!("[Monitor] 扫描超时，未找到 {mac}，{retry_delay}s 后重试");
+                    // permit 在此 drop，释放扫描锁
+                    time::sleep(Duration::from_secs(retry_delay)).await;
+                    retry_delay = (retry_delay * 2).min(300);
+                    continue;
+                }
+                Err(e) => {
+                    error!("[Monitor] 扫描失败 {mac}: {e}，{retry_delay}s 后重试");
+                    time::sleep(Duration::from_secs(retry_delay)).await;
+                    continue;
+                }
             }
-            Err(e) => {
-                error!("[Monitor] 扫描失败 {mac}: {e}，{retry_delay}s 后重试");
-                time::sleep(Duration::from_secs(retry_delay)).await;
-                continue;
-            }
+            // _permit 在此 drop → 下一台设备可以开始扫描
         };
 
         // 找到设备则重置退避
@@ -98,7 +99,7 @@ async fn monitor_device(
     }
 }
 
-/// 启动所有设备的监控任务（并发执行，互不干扰）。
+/// 启动所有设备的监控任务（扫描串行、连接并发）。
 pub async fn run_all(
     devices: Vec<DeviceInfo>,
     settings: AppSettings,
@@ -109,14 +110,33 @@ pub async fn run_all(
         return;
     }
 
+    // ── 获取全局共享 Adapter（避免各 task 重复初始化）────────────────────────
+    let adapter = match get_adapter().await {
+        Ok(a) => Arc::new(a),
+        Err(e) => {
+            error!("[Monitor] 无法获取 BLE 适配器，程序无法运行: {e}");
+            return;
+        }
+    };
+
+    // ── 扫描互斥信号量：同一时刻只有 1 个 task 可执行 start/stop_scan ────────
+    let scan_lock = Arc::new(Semaphore::new(1));
+
     let settings = Arc::new(settings);
 
     let mut handles = Vec::with_capacity(devices.len());
-    for device in devices {
+    for (i, device) in devices.into_iter().enumerate() {
         let s = settings.clone();
         let r = reporter.clone();
+        let a = adapter.clone();
+        let lock = scan_lock.clone();
+
         let handle = tokio::spawn(async move {
-            monitor_device(device, s, r).await;
+            // 各 task 错开 500ms 启动，避免全体同时竞争扫描锁
+            if i > 0 {
+                time::sleep(Duration::from_millis(500 * i as u64)).await;
+            }
+            monitor_device(device, s, r, a, lock).await;
         });
         handles.push(handle);
     }
