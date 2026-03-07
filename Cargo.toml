@@ -1,6 +1,6 @@
 [package]
 name = "powercess"
-version = "1.3.0"
+version = "1.3.1"
 edition = "2021"
 
 # ── Feature 开关 ────────────────────────────────────────────────────────────────
@@ -59,11 +59,12 @@ chrono       = { version = "0.4", features = ["serde"] }
 # btleplug 在 Linux 上通过 dbus crate 访问 BlueZ，dbus 是唯一必须的 C 依赖。
 # vendored feature：从内嵌的 D-Bus C 源码编译并静态链接，
 # 消除对系统 libdbus-1-dev 包的依赖，使交叉编译 Dockerfile 大幅简化。
-[target.'cfg(target_os = "linux")'.dependencies]
-dbus = { version = "0.9", features = ["vendored"] }
-
 # 配置文件（重命名为 config_crate，避免与 mod config 冲突）
 config_crate = { version = "0.15", package = "config" }
+
+# ── Linux 平台特定 ────────────────────────────────────────────────────────────
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus = { version = "0.9", features = ["vendored"] }
 
 [profile.release]
 opt-level     = 3
