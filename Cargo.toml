@@ -27,7 +27,7 @@ serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
 
 # 数据库（可选）
-sqlx = { version = "0.8", optional = true, features = ["runtime-tokio-rustls", "chrono"] }
+sqlx = { version = "0.8", optional = true, features = ["runtime-tokio-rustls", "chrono", "json"] }
 
 # HTTP（可选）
 axum         = { version = "0.8", optional = true, features = ["ws"] }

@@ -1,0 +1,1 @@
+cargo build --release --no-default-features --features store-postgres,reporter-http

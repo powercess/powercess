@@ -85,6 +85,21 @@ async fn run(cfg: AppConfig) -> anyhow::Result<()> {
         }
     }
 
+    // PostgreSQL 数据库上报（写入 raw_measurements Hypertable）
+    #[cfg(feature = "store-postgres")]
+    if cfg.reporter.db_enabled {
+        if let StoreConfig::Postgres { ref url } = cfg.store {
+            use reporter::database::PostgresDatabaseReporter;
+            use store::postgres::PostgresStore;
+
+            let pg = PostgresStore::connect(url).await?;
+            reporters.push(Arc::new(PostgresDatabaseReporter::new(
+                pg.pool().clone(),
+            )));
+            info!("[Reporter] PostgreSQL 数据库上报已启用 (raw_measurements)");
+        }
+    }
+
     // HTTP REST API 上报
     // 先于 monitor 启动，确保端口已 bind 后再开始 BLE 任务
     #[allow(unused_mut)]

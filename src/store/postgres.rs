@@ -1,26 +1,8 @@
 //! PostgreSQL 设备数据层（feature: store-postgres）
 //!
-//! 在使用前请先手动执行建表 SQL：
-//! ```sql
-//! CREATE TABLE IF NOT EXISTS devices (
-//!     mac   TEXT PRIMARY KEY,
-//!     name  TEXT NOT NULL,
-//!     label TEXT
-//! );
-//! CREATE TABLE IF NOT EXISTS measurements (
-//!     id           BIGSERIAL PRIMARY KEY,
-//!     device_mac   TEXT      NOT NULL,
-//!     recorded_at  TIMESTAMPTZ NOT NULL,
-//!     voltage      FLOAT8    NOT NULL,
-//!     current_a    FLOAT8    NOT NULL,
-//!     power        FLOAT8    NOT NULL,
-//!     frequency    FLOAT8    NOT NULL,
-//!     power_factor FLOAT8    NOT NULL,
-//!     pf_type      TEXT      NOT NULL,
-//!     energy       FLOAT8    NOT NULL,
-//!     uptime_secs  INT       NOT NULL
-//! );
-//! ```
+//! 依赖 `database/timescaledb/init.sql` 初始化后的完整 Schema：
+//! - `devices`          — 设备实例（字段 mac_address、name、location、is_active、is_deleted）
+//! - `raw_measurements` — TimescaleDB Hypertable，payload 为 JSONB
 
 use async_trait::async_trait;
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -61,8 +43,13 @@ impl DeviceStore for PostgresStore {
             label: Option<String>,
         }
 
+        // 新 schema：mac_address（UNIQUE TEXT）、location 对应旧 label
+        // 仅返回激活且未软删除的设备
         let rows: Vec<DeviceRow> = sqlx::query_as(
-            "SELECT mac, name, label FROM devices",
+            "SELECT mac_address AS mac, name, location AS label \
+             FROM devices \
+             WHERE is_active AND NOT is_deleted \
+             ORDER BY name",
         )
         .fetch_all(&self.pool)
         .await
