@@ -10,16 +10,18 @@ use config_crate::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
 
 // ── 默认值常量（兖底，config.toml 注释与此保持一致）────────────────────────
-const DEFAULT_POLL_INTERVAL_SECS:  u64   = 1;
-const DEFAULT_WORKER_THREADS:      usize = 2;
-const DEFAULT_SCAN_TIMEOUT_SECS:   u64   = 15;
-const DEFAULT_RETRY_INTERVAL_SECS: u64   = 30;
+const DEFAULT_POLL_INTERVAL_SECS:   u64   = 1;
+const DEFAULT_WORKER_THREADS:       usize = 2;
+const DEFAULT_SCAN_TIMEOUT_SECS:    u64   = 15;
+const DEFAULT_RETRY_INTERVAL_SECS:  u64   = 30;
+const DEFAULT_MAX_BLE_CONNECTIONS:  usize = 5;
 
-fn default_poll_interval()  -> u64    { DEFAULT_POLL_INTERVAL_SECS }
-fn default_worker_threads() -> usize  { DEFAULT_WORKER_THREADS }
-fn default_log_level()      -> String { "info".into() }
-fn default_scan_timeout()   -> u64    { DEFAULT_SCAN_TIMEOUT_SECS }
-fn default_retry_interval() -> u64    { DEFAULT_RETRY_INTERVAL_SECS }
+fn default_poll_interval()      -> u64    { DEFAULT_POLL_INTERVAL_SECS }
+fn default_worker_threads()     -> usize  { DEFAULT_WORKER_THREADS }
+fn default_log_level()          -> String { "info".into() }
+fn default_scan_timeout()       -> u64    { DEFAULT_SCAN_TIMEOUT_SECS }
+fn default_retry_interval()     -> u64    { DEFAULT_RETRY_INTERVAL_SECS }
+fn default_max_ble_connections() -> usize  { DEFAULT_MAX_BLE_CONNECTIONS }
 fn default_sqlite_path()    -> String { "powercess.db".into() }
 fn default_http_bind()      -> String { "0.0.0.0:8080".into() }
 fn bool_true()              -> bool   { true }
@@ -54,6 +56,9 @@ pub struct AppSettings {
     /// 连接失败后，重试间隔（秒）
     #[serde(default = "default_retry_interval")]
     pub retry_interval_secs: u64,
+    /// 同时允许保持的 BLE 连接数上限（受限于蓝牙适配器硬件，通常 5~7）
+    #[serde(default = "default_max_ble_connections")]
+    pub max_ble_connections: usize,
 }
 
 // ── 存储后端配置 ──────────────────────────────────────────────────────────────
@@ -121,6 +126,7 @@ impl Default for AppConfig {
                 log_level:           "info".into(),
                 scan_timeout_secs:   DEFAULT_SCAN_TIMEOUT_SECS,
                 retry_interval_secs: DEFAULT_RETRY_INTERVAL_SECS,
+                max_ble_connections: DEFAULT_MAX_BLE_CONNECTIONS,
             },
             store: StoreConfig::Static,
             reporter: ReporterConfig {
