@@ -1,3 +1,19 @@
 # Cross.toml
+# 容器引擎说明：
+#   本地：export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
+#   CI：默认走 Docker，无需额外设置
+
 [target.aarch64-unknown-linux-gnu]
-dockerfile = "Dockerfile.cross"
+dockerfile = "docker/Dockerfile.cross.aarch64"
+
+# 树莓派 2/3/4 32-bit, BeagleBone 及其他 ARMv7 开发板
+[target.armv7-unknown-linux-gnueabihf]
+dockerfile = "docker/Dockerfile.cross.armv7"
+
+# arm-unknown-linux-gnueabihf (ARMv6, 树莓派 1/Zero) 已移除：
+# Debian 无 ARMv6 hard-float 二进包，交叉编译 expat/dbus 需要额外处理。
+# Pi Zero 2W 及更新设备请使用 aarch64-unknown-linux-gnu。
+
+# x86 32-bit 嵌入式 Linux
+[target.i686-unknown-linux-gnu]
+dockerfile = "docker/Dockerfile.cross.i686"

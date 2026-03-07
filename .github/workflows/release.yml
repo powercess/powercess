@@ -1,0 +1,143 @@
+name: Release
+
+# 触发条件：推送形如 v1.2.3 的语义化版本 tag
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write # 允许创建 Release 并上传附件
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # CI 使用 Docker（覆盖 Cross.toml 中本地开发的 podman 设置）
+  CROSS_CONTAINER_ENGINE: docker
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 构建矩阵
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build · ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── 原生构建（无需 cross）────────────────────────────────────────────
+          - target: x86_64-unknown-linux-gnu # x86_64 Linux
+            os: ubuntu-22.04
+            use_cross: false
+
+          - target: aarch64-apple-darwin # Apple Silicon macOS
+            os: macos-14
+            use_cross: false
+
+          # ── 交叉编译（通过 cross）──────────────────────────────────────────
+          - target: aarch64-unknown-linux-gnu # 树莓派 4/5 (64-bit)
+            os: ubuntu-22.04
+            use_cross: true
+
+          - target: armv7-unknown-linux-gnueabihf # 树莓派 2/3/4 32-bit, BeagleBone 等 ARMv7 板卡
+            os: ubuntu-22.04
+            use_cross: true
+
+          # arm-unknown-linux-gnueabihf (ARMv6, 树莓派 1/Zero) 已移除：
+          # Debian 无 ARMv6 hard-float 交叉包，dbus/vendored 交叉编译 expat 需要特殊处理。
+          # Pi Zero 2W 及更新设备已使用 aarch64，请改用 aarch64-unknown-linux-gnu。
+
+          - target: i686-unknown-linux-gnu # x86 32-bit Linux
+            os: ubuntu-22.04
+            use_cross: true
+
+    steps:
+      # ── 检出代码 ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 验证 tag 版本与 Cargo.toml 一致 ─────────────────────────────────────
+      - name: Verify version matches tag
+        shell: bash
+        run: |
+          CARGO_VER="v$(grep '^version' Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')"
+          TAG="${{ github.ref_name }}"
+          if [[ "$CARGO_VER" != "$TAG" ]]; then
+            echo "::error::Cargo.toml version ($CARGO_VER) does not match tag ($TAG)"
+            exit 1
+          fi
+
+      # ── 安装 Rust 工具链，添加目标平台 ──────────────────────────────────────
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # ── Rust 编译缓存 ────────────────────────────────────────────────────────
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # ── 安装 cross（交叉编译工具）────────────────────────────────────────────
+      - name: Install cross
+        if: matrix.use_cross == true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      # ── 原生 Linux 构建所需系统依赖 ────────────────────────────────────────────
+      # SQLite: 使用 Cargo bundled feature，无需系统 libsqlite3-dev
+      # D-Bus:  使用 dbus/vendored，从内嵌 C 源码编译，需要 cmake + libexpat1-dev
+      - name: Install native system deps (Linux)
+        if: runner.os == 'Linux' && matrix.use_cross == false
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            libexpat1-dev \
+            pkg-config
+
+      # ── 交叉编译 ────────────────────────────────────────────────────────────
+      - name: Build (cross)
+        if: matrix.use_cross == true
+        run: cross build --release --target ${{ matrix.target }}
+
+      # ── 原生编译 ────────────────────────────────────────────────────────────
+      - name: Build (native)
+        if: matrix.use_cross == false
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # ── 打包二进制 + 生成 SHA256 校验文件 ────────────────────────────────────
+      - name: Package binary
+        shell: bash
+        run: |
+          BIN="powercess"
+          TAG="${{ github.ref_name }}"
+          TARGET="${{ matrix.target }}"
+          ARCHIVE="${BIN}-${TAG}-${TARGET}.tar.gz"
+
+          cd "target/${TARGET}/release"
+          tar czf "../../../${ARCHIVE}" "${BIN}"
+          cd ../../..
+
+          # sha256sum 在 macOS 上不存在，用 shasum -a 256 作为回退
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          else
+            shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          fi
+
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+          echo "ARCHIVE_SHA=${ARCHIVE}.sha256" >> "$GITHUB_ENV"
+
+      # ── 上传制品并发布 Release ───────────────────────────────────────────────
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          generate_release_notes: true # 自动从 commit 生成 changelog
+          files: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE_SHA }}

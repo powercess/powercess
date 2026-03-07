@@ -1,0 +1,17 @@
+# Dockerfile.cross.i686
+# 目标：i686-unknown-linux-gnu（x86 32-bit 嵌入式 Linux）
+# Debian 包架构：i386
+ARG CROSS_BASE_IMAGE
+FROM $CROSS_BASE_IMAGE
+
+# 依赖说明：
+#   SQLite: Cargo 使用 libsqlite3-sys/bundled，从源码编译，无需系统包
+#   D-Bus:  Cargo 使用 dbus/vendored，从内嵌 C 源码编译。
+#           需要 cmake（构建工具）和 libexpat1-dev：i386（dbus 的 XML 解析层依赖）
+RUN dpkg --add-architecture i386 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        cmake \
+        libexpat1-dev:i386 \
+        pkg-config && \
+    rm -rf /var/lib/apt/lists/*

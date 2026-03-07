@@ -1,0 +1,17 @@
+# Dockerfile.cross.armv7
+# 目标：armv7-unknown-linux-gnueabihf（树莓派 2/3/4 32-bit, BeagleBone 等 ARMv7 开发板）
+# Debian 包架构：armhf
+ARG CROSS_BASE_IMAGE
+FROM $CROSS_BASE_IMAGE
+
+# 依赖说明：
+#   SQLite: Cargo 使用 libsqlite3-sys/bundled，从源码编译，无需系统包
+#   D-Bus:  Cargo 使用 dbus/vendored，从内嵌 C 源码编译。
+#           需要 cmake（构建工具）和 libexpat1-dev：armhf（dbus 的 XML 解析层依赖）
+RUN dpkg --add-architecture armhf && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        cmake \
+        libexpat1-dev:armhf \
+        pkg-config && \
+    rm -rf /var/lib/apt/lists/*
