@@ -109,7 +109,7 @@ jobs:
         if: matrix.use_cross == false
         run: cargo build --release --target ${{ matrix.target }}
 
-      # ── 打包二进制 + 生成 SHA256 校验文件 ────────────────────────────────────
+      # ── 打包二进制 + config.toml + 生成 SHA256 校验文件 ──────────────────────
       - name: Package binary
         shell: bash
         run: |
@@ -118,9 +118,8 @@ jobs:
           TARGET="${{ matrix.target }}"
           ARCHIVE="${BIN}-${TAG}-${TARGET}.tar.gz"
 
-          cd "target/${TARGET}/release"
-          tar czf "../../../${ARCHIVE}" "${BIN}"
-          cd ../../..
+          # 从项目根目录打包：config.toml 直接引用，二进制通过 -C 切换目录引用
+          tar czf "${ARCHIVE}" config.toml -C "target/${TARGET}/release" "${BIN}"
 
           # sha256sum 在 macOS 上不存在，用 shasum -a 256 作为回退
           if command -v sha256sum &>/dev/null; then
