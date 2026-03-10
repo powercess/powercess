@@ -100,12 +100,27 @@ pub struct ReporterConfig {
 
 impl AppConfig {
     /// 运行时加载配置。
-    /// 当 `config.toml` 不存在时，所有字段回落到 Rust const 默认值。
-    pub fn load() -> anyhow::Result<Self> {
-        let cfg = Config::builder()
-            // 层 1：运行目录的 config.toml（可缺失）
-            .add_source(File::with_name("config").required(false))
-            // 层 2：环境变量覆盖
+    /// 当配置文件不存在时，所有字段回落到 Rust const 默认值。
+    ///
+    /// # 参数
+    /// - `config_path`: 可选的配置文件路径。若为 None，则尝试从运行目录加载 `config.toml`
+    pub fn load(config_path: Option<&str>) -> anyhow::Result<Self> {
+        let mut builder = Config::builder();
+
+        // 层 1：配置文件（可缺失）
+        match config_path {
+            Some(path) => {
+                // 用户指定的配置文件路径
+                builder = builder.add_source(File::with_name(path).required(false));
+            }
+            None => {
+                // 默认从运行目录加载 config.toml
+                builder = builder.add_source(File::with_name("config").required(false));
+            }
+        }
+
+        // 层 2：环境变量覆盖
+        let cfg = builder
             .add_source(
                 Environment::with_prefix("POWERCESS")
                     .separator("__")

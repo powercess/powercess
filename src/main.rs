@@ -6,9 +6,9 @@
 //!           ─► monitor::run_all (每台设备独立 tokio task)
 //!
 //! 用法：
-//!   cargo run                                           # 使用 config.toml，info 日志
-//!   RUST_LOG=debug cargo run                            # 详细日志
-//!   POWERCESS__APP__POLL_INTERVAL_SECS=30 cargo run    # 环境变量覆盖
+//!   powercess -c config.toml                  # 使用指定配置文件启动
+//!   powercess --config /etc/powercess.toml    # 同上
+//!   powercess                                 # 显示帮助信息
 
 mod ble;
 mod config;
@@ -18,20 +18,59 @@ mod monitor;
 mod reporter;
 mod store;
 
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
+use clap::Parser;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::config::{AppConfig, StoreConfig};
 use crate::reporter::MultiReporter;
 
+/// powercess — 德力西功率计 BLE 实时监控系统
+#[derive(Parser, Debug)]
+#[command(name = "powercess")]
+#[command(version)]
+#[command(about = "德力西功率计 BLE 实时监控系统", long_about = None)]
+struct Args {
+    /// 配置文件路径 (如: config.toml)
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
-    // ── 加载配置 ─────────────────────────────────────────────────────────────
-    let cfg = AppConfig::load().unwrap_or_else(|e| {
-        eprintln!("[WARN] 读取 config.toml 失败（{e}），使用默认配置");
+    let args = Args::parse();
+
+    // 如果没有指定配置文件，显示帮助信息并退出
+    let config_path = match args.config {
+        Some(path) => path,
+        None => {
+            println!("powercess v{} - 德力西功率计 BLE 实时监控系统\n", env!("CARGO_PKG_VERSION"));
+            println!("用法:");
+            println!("  powercess -c <CONFIG_FILE>    使用指定配置文件启动");
+            println!("  powercess --config <FILE>     同上");
+            println!("\n示例:");
+            println!("  powercess -c config.toml");
+            println!("  powercess -c /etc/powercess/config.toml");
+            println!("\n更多帮助:");
+            println!("  powercess --help");
+            println!("  powercess --version");
+            std::process::exit(0);
+        }
+    };
+
+    // 检查配置文件是否存在
+    if !Path::new(&config_path).exists() {
+        eprintln!("[ERROR] 配置文件不存在: {config_path}");
+        std::process::exit(1);
+    }
+
+    // ── 加载配置 ─────────────────────────────────────────────────────
+    let cfg = AppConfig::load(Some(&config_path)).unwrap_or_else(|e| {
+        eprintln!("[WARN] 读取 {} 失败（{e}），使用默认配置", config_path);
         AppConfig::default()
     });
 
@@ -43,10 +82,10 @@ async fn main() {
         )
         .init();
 
-    info!("powercess v{} 启动", env!("CARGO_PKG_VERSION"));
+    info!("powercess v{} 启动，配置文件: {}", env!("CARGO_PKG_VERSION"), config_path);
 
     if let Err(e) = run(cfg).await {
-        error!("💥 程序异常退出: {e:#}");
+        error!("程序异常退出: {e:#}");
         std::process::exit(1);
     }
 }
@@ -64,7 +103,7 @@ async fn run(cfg: AppConfig) -> anyhow::Result<()> {
 
     info!("共 {} 台设备需要监控", devices.len());
     for d in &devices {
-        info!("  • {} ({}) label={:?}", d.name, d.mac, d.label);
+        info!("  - {} ({}) label={:?}", d.name, d.mac, d.label);
     }
 
     // ── 2. 构建上报链 ────────────────────────────────────────────────────────
