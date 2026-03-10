@@ -1,19 +1,19 @@
 # 构建阶段
-FROM node:20-alpine AS builder
+FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
 # 复制 package 文件
-COPY web/power_monitor/package*.json ./
+COPY web/power_monitor/package.json ./
 
 # 安装依赖
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # 复制源代码
 COPY web/power_monitor/ ./
 
 # 构建应用
-RUN npm run build
+RUN bun run build
 
 # 生产阶段 - 使用 nginx 托管静态文件
 FROM nginx:alpine AS production
