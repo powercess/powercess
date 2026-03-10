@@ -25,39 +25,71 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Feature 变体：sqlite 和 postgres 两种数据库后端
-        feature:
-          - name: sqlite
-            cargo_args: --features store-sqlite,reporter-http
-          - name: postgres
-            cargo_args: --features store-postgres,reporter-http
-        # 目标平台
-        target:
-          # ── 原生构建（无需 cross）────────────────────────────────────────────
-          - name: x86_64-unknown-linux-gnu
+        include:
+          # ── x86_64 Linux ────────────────────────────────────────────────────
+          - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: false
+            feature: sqlite
+            cargo_args: --features store-sqlite,reporter-http
 
-          - name: aarch64-apple-darwin
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: false
+            feature: postgres
+            cargo_args: --features store-postgres,reporter-http
+
+          # ── Apple Silicon macOS ──────────────────────────────────────────────
+          - target: aarch64-apple-darwin
             os: macos-14
             use_cross: false
+            feature: sqlite
+            cargo_args: --features store-sqlite,reporter-http
 
-          # ── 交叉编译（通过 cross）──────────────────────────────────────────
-          - name: aarch64-unknown-linux-gnu
+          - target: aarch64-apple-darwin
+            os: macos-14
+            use_cross: false
+            feature: postgres
+            cargo_args: --features store-postgres,reporter-http
+
+          # ── aarch64 Linux (树莓派 4/5) ───────────────────────────────────────
+          - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: true
+            feature: sqlite
+            cargo_args: --features store-sqlite,reporter-http
 
-          - name: armv7-unknown-linux-gnueabihf
+          - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: true
+            feature: postgres
+            cargo_args: --features store-postgres,reporter-http
 
-          # arm-unknown-linux-gnueabihf (ARMv6, 树莓派 1/Zero) 已移除：
-          # Debian 无 ARMv6 hard-float 交叉包，dbus/vendored 交叉编译 expat 需要特殊处理。
-          # Pi Zero 2W 及更新设备已使用 aarch64，请改用 aarch64-unknown-linux-gnu。
-
-          - name: i686-unknown-linux-gnu
+          # ── armv7 Linux (树莓派 2/3/4 32-bit) ────────────────────────────────
+          - target: armv7-unknown-linux-gnueabihf
             os: ubuntu-22.04
             use_cross: true
+            feature: sqlite
+            cargo_args: --features store-sqlite,reporter-http
+
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-22.04
+            use_cross: true
+            feature: postgres
+            cargo_args: --features store-postgres,reporter-http
+
+          # ── i686 Linux (x86 32-bit) ──────────────────────────────────────────
+          - target: i686-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: true
+            feature: sqlite
+            cargo_args: --features store-sqlite,reporter-http
+
+          - target: i686-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: true
+            feature: postgres
+            cargo_args: --features store-postgres,reporter-http
 
     steps:
       # ── 检出代码 ────────────────────────────────────────────────────────────
@@ -79,17 +111,17 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target.name }}
+          targets: ${{ matrix.target }}
 
       # ── Rust 编译缓存 ────────────────────────────────────────────────────────
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target.name }}-${{ matrix.feature.name }}
+          key: ${{ matrix.target }}-${{ matrix.feature }}
 
       # ── 安装 cross（交叉编译工具）────────────────────────────────────────────
       - name: Install cross
-        if: matrix.target.use_cross == true
+        if: matrix.use_cross == true
         uses: taiki-e/install-action@v2
         with:
           tool: cross
@@ -98,7 +130,7 @@ jobs:
       # SQLite: 使用 Cargo bundled feature，无需系统 libsqlite3-dev
       # D-Bus:  使用 dbus/vendored，从内嵌 C 源码编译，需要 cmake + libexpat1-dev
       - name: Install native system deps (Linux)
-        if: runner.os == 'Linux' && matrix.target.use_cross == false
+        if: runner.os == 'Linux' && matrix.use_cross == false
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -108,13 +140,13 @@ jobs:
 
       # ── 交叉编译 ────────────────────────────────────────────────────────────
       - name: Build (cross)
-        if: matrix.target.use_cross == true
-        run: cross build --release --target ${{ matrix.target.name }} ${{ matrix.feature.cargo_args }}
+        if: matrix.use_cross == true
+        run: cross build --release --target ${{ matrix.target }} ${{ matrix.cargo_args }}
 
       # ── 原生编译 ────────────────────────────────────────────────────────────
       - name: Build (native)
-        if: matrix.target.use_cross == false
-        run: cargo build --release --target ${{ matrix.target.name }} ${{ matrix.feature.cargo_args }}
+        if: matrix.use_cross == false
+        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo_args }}
 
       # ── 打包二进制 + config.toml + 生成 SHA256 校验文件 ──────────────────────
       - name: Package binary
@@ -122,8 +154,8 @@ jobs:
         run: |
           BIN="powercess"
           TAG="${{ github.ref_name }}"
-          TARGET="${{ matrix.target.name }}"
-          FEATURE="${{ matrix.feature.name }}"
+          TARGET="${{ matrix.target }}"
+          FEATURE="${{ matrix.feature }}"
           ARCHIVE="${BIN}-${TAG}-${TARGET}-${FEATURE}.tar.gz"
 
           # 从项目根目录打包：config.toml 直接引用，二进制通过 -C 切换目录引用
