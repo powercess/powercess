@@ -12,7 +12,7 @@ permissions:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ github.repository_owner }}/power-monitor
+  IMAGE_NAME: cn059/power-monitor
 
 jobs:
   build-and-push:
