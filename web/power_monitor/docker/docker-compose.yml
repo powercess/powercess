@@ -4,7 +4,7 @@ services:
       context: ../../..
       dockerfile: web/power_monitor/docker/Dockerfile
     ports:
-      - "3000:80"
+      - "3000:3000"
     environment:
       - NUXT_PUBLIC_API_BASE=http://your-server:5090
       - NUXT_PUBLIC_WS_BASE=ws://your-server:5090

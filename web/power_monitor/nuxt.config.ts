@@ -9,24 +9,19 @@ export default defineNuxtConfig({
   /**
    * 运行时配置
    *
-   * 开发模式：使用 Vite 代理转发
-   * 生产环境：容器启动时通过 docker-entrypoint.sh 替换占位符
-   *
    * 运行容器时传入环境变量：
-   *   docker run -e NUXT_PUBLIC_API_BASE=http://xxx -e NUXT_PUBLIC_WS_BASE=ws://xxx ...
+   *   podman run -e NUXT_PUBLIC_API_BASE=http://xxx -e NUXT_PUBLIC_WS_BASE=ws://xxx ...
    */
   runtimeConfig: {
     public: {
       /**
        * Rust 后端 HTTP 基地址
-       * 生产环境使用占位符，容器启动时替换
        */
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || "__NUXT_PUBLIC_API_BASE__",
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || "",
       /**
        * Rust 后端 WebSocket 基地址
-       * 生产环境使用占位符，容器启动时替换
        */
-      wsBase: process.env.NUXT_PUBLIC_WS_BASE || "__NUXT_PUBLIC_WS_BASE__",
+      wsBase: process.env.NUXT_PUBLIC_WS_BASE || "",
     },
   },
 
