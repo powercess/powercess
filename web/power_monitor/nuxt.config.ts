@@ -1,6 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
+  ssr: false,
   devtools: { enabled: true },
   modules: ["@nuxt/eslint", "@nuxt/image", "@nuxt/ui"],
   css: ["~/assets/css/main.css"],
@@ -8,24 +9,24 @@ export default defineNuxtConfig({
   /**
    * 运行时配置
    *
-   * 开发模式： apiBase 留空（请求经过 Vite 代理转发），wsBase 留空（客户端动态推导）
-   * 生产环境覆盖：
-   *   NUXT_PUBLIC_API_BASE=http://192.168.1.x:3030
-   *   NUXT_PUBLIC_WS_BASE=ws://192.168.1.x:3030
+   * 开发模式：使用 Vite 代理转发
+   * 生产环境：容器启动时通过 docker-entrypoint.sh 替换占位符
+   *
+   * 运行容器时传入环境变量：
+   *   docker run -e NUXT_PUBLIC_API_BASE=http://xxx -e NUXT_PUBLIC_WS_BASE=ws://xxx ...
    */
   runtimeConfig: {
     public: {
       /**
        * Rust 后端 HTTP 基地址
-       * 开发模式置空字符串——请求经 Vite devProxy 转发，起到跳过 CORS 的作用
-       * 生产环境通过环境变量设置完整地址
+       * 生产环境使用占位符，容器启动时替换
        */
-      apiBase: "http://127.0.0.1:8080",
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || "__NUXT_PUBLIC_API_BASE__",
       /**
        * Rust 后端 WebSocket 基地址
-       * 留空时客户端动态推导（ws:// 毴当前页面协议）
+       * 生产环境使用占位符，容器启动时替换
        */
-      wsBase: "ws://127.0.0.1:8080",
+      wsBase: process.env.NUXT_PUBLIC_WS_BASE || "__NUXT_PUBLIC_WS_BASE__",
     },
   },
 
