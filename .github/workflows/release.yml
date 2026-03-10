@@ -20,27 +20,34 @@ env:
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
   build:
-    name: Build · ${{ matrix.target }}
+    name: Build · ${{ matrix.target }} · ${{ matrix.feature }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
+        # Feature 变体：sqlite 和 postgres 两种数据库后端
+        feature:
+          - name: sqlite
+            cargo_args: --features store-sqlite,reporter-http
+          - name: postgres
+            cargo_args: --features store-postgres,reporter-http
+        # 目标平台
+        target:
           # ── 原生构建（无需 cross）────────────────────────────────────────────
-          - target: x86_64-unknown-linux-gnu # x86_64 Linux
+          - name: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: false
 
-          - target: aarch64-apple-darwin # Apple Silicon macOS
+          - name: aarch64-apple-darwin
             os: macos-14
             use_cross: false
 
           # ── 交叉编译（通过 cross）──────────────────────────────────────────
-          - target: aarch64-unknown-linux-gnu # 树莓派 4/5 (64-bit)
+          - name: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: true
 
-          - target: armv7-unknown-linux-gnueabihf # 树莓派 2/3/4 32-bit, BeagleBone 等 ARMv7 板卡
+          - name: armv7-unknown-linux-gnueabihf
             os: ubuntu-22.04
             use_cross: true
 
@@ -48,7 +55,7 @@ jobs:
           # Debian 无 ARMv6 hard-float 交叉包，dbus/vendored 交叉编译 expat 需要特殊处理。
           # Pi Zero 2W 及更新设备已使用 aarch64，请改用 aarch64-unknown-linux-gnu。
 
-          - target: i686-unknown-linux-gnu # x86 32-bit Linux
+          - name: i686-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: true
 
@@ -72,17 +79,17 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.target.name }}
 
       # ── Rust 编译缓存 ────────────────────────────────────────────────────────
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: ${{ matrix.target.name }}-${{ matrix.feature.name }}
 
       # ── 安装 cross（交叉编译工具）────────────────────────────────────────────
       - name: Install cross
-        if: matrix.use_cross == true
+        if: matrix.target.use_cross == true
         uses: taiki-e/install-action@v2
         with:
           tool: cross
@@ -91,7 +98,7 @@ jobs:
       # SQLite: 使用 Cargo bundled feature，无需系统 libsqlite3-dev
       # D-Bus:  使用 dbus/vendored，从内嵌 C 源码编译，需要 cmake + libexpat1-dev
       - name: Install native system deps (Linux)
-        if: runner.os == 'Linux' && matrix.use_cross == false
+        if: runner.os == 'Linux' && matrix.target.use_cross == false
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -101,13 +108,13 @@ jobs:
 
       # ── 交叉编译 ────────────────────────────────────────────────────────────
       - name: Build (cross)
-        if: matrix.use_cross == true
-        run: cross build --release --target ${{ matrix.target }}
+        if: matrix.target.use_cross == true
+        run: cross build --release --target ${{ matrix.target.name }} ${{ matrix.feature.cargo_args }}
 
       # ── 原生编译 ────────────────────────────────────────────────────────────
       - name: Build (native)
-        if: matrix.use_cross == false
-        run: cargo build --release --target ${{ matrix.target }}
+        if: matrix.target.use_cross == false
+        run: cargo build --release --target ${{ matrix.target.name }} ${{ matrix.feature.cargo_args }}
 
       # ── 打包二进制 + config.toml + 生成 SHA256 校验文件 ──────────────────────
       - name: Package binary
@@ -115,8 +122,9 @@ jobs:
         run: |
           BIN="powercess"
           TAG="${{ github.ref_name }}"
-          TARGET="${{ matrix.target }}"
-          ARCHIVE="${BIN}-${TAG}-${TARGET}.tar.gz"
+          TARGET="${{ matrix.target.name }}"
+          FEATURE="${{ matrix.feature.name }}"
+          ARCHIVE="${BIN}-${TAG}-${TARGET}-${FEATURE}.tar.gz"
 
           # 从项目根目录打包：config.toml 直接引用，二进制通过 -C 切换目录引用
           tar czf "${ARCHIVE}" config.toml -C "target/${TARGET}/release" "${BIN}"
