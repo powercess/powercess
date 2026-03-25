@@ -6,6 +6,15 @@ export default defineNuxtConfig({
   modules: ["@nuxt/eslint", "@nuxt/image", "@nuxt/ui"],
   css: ["~/assets/css/main.css"],
 
+  nitro: {
+    // 信任 X-Forwarded-Proto 等头部，解决反向代理后的协议识别问题
+    // 设置为 true 表示信任所有直接连接的代理（适合内网穿透场景）
+    // 如果出于安全考虑，也可以指定具体的 IP 数组，例如：['127.0.0.1', '172.16.0.0/12']
+    xForwardedHeaders: {
+      trustProxy: true,
+    },
+  },
+
   /**
    * 运行时配置
    *
